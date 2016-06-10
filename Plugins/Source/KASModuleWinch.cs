@@ -158,6 +158,7 @@ public class KASModuleWinch : KASModuleAttachCore {
   private Vector3 headCurrentLocalPos;
   private Quaternion headCurrentLocalRot;
   private float orgWinchMass;
+  private float cableLengthFromSave;
 
   public enum PlugState {
     Locked = 0,
@@ -277,6 +278,7 @@ public class KASModuleWinch : KASModuleAttachCore {
       cableNode.AddValue(
           "headLocalRot",
           KSPUtil.WriteQuaternion(KAS_Shared.GetLocalRotFrom(headTransform, this.part.transform)));
+      cableNode.AddValue("cableJointLength", cableJointLength);
     }
 
     if (headState == PlugState.PlugDocked || headState == PlugState.PlugUndocked) {
@@ -298,6 +300,10 @@ public class KASModuleWinch : KASModuleAttachCore {
       headCurrentLocalPos = KSPUtil.ParseVector3(cableNode.GetValue("headLocalPos"));
       headCurrentLocalRot = KSPUtil.ParseQuaternion(cableNode.GetValue("headLocalRot"));
       headState = PlugState.Deployed;
+
+      // load cable length into temporary global, because cableJoint does not exist yet
+      cableLengthFromSave = cableNode.HasValue("cableJointLength") ? float.Parse(cableNode.GetValue("cableJointLength")) : 0.0f;
+
       fromSave = true;
     }
 
@@ -464,7 +470,10 @@ public class KASModuleWinch : KASModuleAttachCore {
       Deploy();
       KAS_Shared.SetPartLocalPosRotFrom(headTransform, this.part.transform,
                                         headCurrentLocalPos, headCurrentLocalRot);
-      cableJointLength = cableRealLenght;
+
+      // v0.5.7 and before did not store cableJointLenght, so use cableRealLenght for old files
+      cableJointLength = (cableLengthFromSave == 0.0f) ? cableRealLenght : cableLengthFromSave;
+
       fromSave = false;
     }
 
@@ -497,11 +506,15 @@ public class KASModuleWinch : KASModuleAttachCore {
       
   public override void OnPartUnpack() {
     base.OnPartUnpack();
-
+/* 
+ * Handled by onVesselGoOffRails (?) 
+ */
+      /*
     KAS_Shared.DebugLog("OnPartUnpack(Winch)");
     if (headState != PlugState.Locked && headTransform.GetComponent<Rigidbody>()) {
       cableJointLength = cableRealLenght;
     }
+       */
   }
 
   protected override void OnDestroy() {
@@ -1035,7 +1048,11 @@ public class KASModuleWinch : KASModuleAttachCore {
     SetHeadToPhysic(false);
     SetCableJointConnectedBody(portModule.part.rb);
     headTransform.parent = portModule.part.transform;
-    cableJointLength = cableRealLenght + 0.01f;
+
+    if (fromSave) {
+        // v0.5.7 and before did not store cableJointLenght, so use cableRealLenght for old files
+        cableJointLength = (cableLengthFromSave == 0.0f) ? (cableRealLenght + 0.01f) : cableLengthFromSave;
+    }
 
     // Set variables
     connectedPortInfo.module = portModule;
@@ -1240,7 +1257,7 @@ public class KASModuleWinch : KASModuleAttachCore {
             guiName = "Instant Stretch")]
   public void ContextMenuCableStretch() {
     if (headState != PlugState.Locked) {
-      cableJointLength = cableRealLenght;
+        cableJointLength = cableRealLenght;
     }
   }
 
