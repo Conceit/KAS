@@ -184,11 +184,7 @@ public class KASModuleWinch : KASModuleAttachCore {
 
   public float cableJointLength {
     get {
-      if (cableJoint) {
-        return cableJoint.maxDistance;
-      } else {
-        return 0;
-      }
+        return cableJoint ? cableJoint.maxDistance : 0;
     }
     set {
       if (cableJoint) {
@@ -199,20 +195,14 @@ public class KASModuleWinch : KASModuleAttachCore {
 
   public float cableRealLength {
     get {
-      if (cableJoint) {
-        return Vector3.Distance(winchAnchorNode.position, headAnchorNode.position);
-      } else
-        return 0;
+        return cableJoint ? Vector3.Distance(winchAnchorNode.position, headAnchorNode.position) : 0;
     }
   }
 
   public Part nodeConnectedPart {
     get {
       AttachNode an = this.part.findAttachNode(connectedPortNodeName);
-      if (an != null && an.attachedPart) {
-        return an.attachedPart;
-      }
-      return null;
+      return (an != null && an.attachedPart) ? an.attachedPart : null;
     }
     set {
       AttachNode an = this.part.findAttachNode(connectedPortNodeName);
@@ -227,50 +217,24 @@ public class KASModuleWinch : KASModuleAttachCore {
   public KASModulePort nodeConnectedPort {
     get {
       AttachNode an = this.part.findAttachNode(connectedPortNodeName);
-      if (an != null) {
-        if (an.attachedPart) {
-          KASModulePort portModule = an.attachedPart.GetComponent<KASModulePort>();
-          if (portModule) {
-            return portModule;
-          }
-        }
-      }
-      return null;
+      return (an != null && an.attachedPart) ? an.attachedPart.GetComponent<KASModulePort>() : null;
     }
     set {
       AttachNode an = this.part.findAttachNode(connectedPortNodeName);
       if (an != null) {
-        if (value) {
-          an.attachedPart = value.part;
-        } else {
-          an.attachedPart = null;
-        }
-      } else {
-        KAS_Shared.DebugError("connectedPort(Winch) Cannot set connectedPort !");
+        if (value != null)
+            an.attachedPart = value.part;
+        else
+            an.attachedPart = null;
       }
+      else
+        KAS_Shared.DebugError("connectedPort(Winch) Cannot set connectedPort !");
     }
   }
 
   public bool PlugDocked {
-    // SMELL: Condense
-    get {
-      if (headState == PlugState.PlugDocked) {
-        return true;
-      } else {
-        return false;
-      }
-    }
-    set {
-      if ((value == true)) {
-        if (headState == PlugState.PlugUndocked) {
-          ChangePlugMode(PlugState.PlugDocked);
-        }
-      } else {
-        if (headState == PlugState.PlugDocked) {
-          ChangePlugMode(PlugState.PlugUndocked);
-        }
-      }
-    }
+    get { return (headState == PlugState.PlugDocked); }
+    set { ChangePlugMode( value ? PlugState.PlugDocked : PlugState.PlugUndocked ); }
   }
 
   public override string GetInfo() {
@@ -470,10 +434,6 @@ public class KASModuleWinch : KASModuleAttachCore {
   }
 
   void OnVesselGoOnRails(Vessel vess) {
-    // SMELL: Remove
-    if (vess != this.vessel) {
-      return;
-    }
   }
 
   void OnVesselGoOffRails(Vessel vess) {
@@ -1103,7 +1063,6 @@ public class KASModuleWinch : KASModuleAttachCore {
   }
 
   public void TogglePlugMode() {
-    // SMELL: Similar to Changeplugmode
     if (headState == PlugState.PlugDocked) {
       ChangePlugMode(PlugState.PlugUndocked);
     } else if (headState == PlugState.PlugUndocked) {
@@ -1115,9 +1074,7 @@ public class KASModuleWinch : KASModuleAttachCore {
   }
 
   public void ChangePlugMode(PlugState newPlugMode) {
-    // SMELL: Is just delegated from Changeplugmode?
-    if (headState == PlugState.PlugDocked || headState == PlugState.PlugUndocked)
-      {
+    if (headState == PlugState.PlugDocked || headState == PlugState.PlugUndocked) {
       KASModulePort orgPort = connectedPortInfo.module;
       UnplugHead(false);
       PlugHead(orgPort, newPlugMode, false);
@@ -1211,20 +1168,9 @@ public class KASModuleWinch : KASModuleAttachCore {
   }
 
   public void RefreshControlState() {
-    // SMELL: More compact
-    if (controlActivated) {
-      if (controlInverted) {
-        controlField = "Enabled(Inverted)";
-      } else {
-        controlField = "Enabled";
-      }
-    } else {
-      if (controlInverted) {
-        controlField = "Disabled(Inverted)";
-      } else {
-        controlField = "Disabled";
-      }
-    }
+      controlField = controlActivated ? "Enabled" : "Disabled";
+      if (controlInverted)
+          controlField += "(Inverted)";
   }
 
   public bool CheckBlocked(bool message = false) {
