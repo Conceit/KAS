@@ -6,7 +6,7 @@ using UnityEngine;
 namespace KAS {
 
 public class KASModuleWinch : KASModuleAttachCore {
-  //Part.cfg file
+  #region Fields from Part.cfg file
   [KSPField]
   public float maxLength = 50.0f;
   [KSPField]
@@ -51,8 +51,9 @@ public class KASModuleWinch : KASModuleAttachCore {
   public float lockMinDist = 0.08f;
   [KSPField]
   public float lockMinFwdDot = 0.90f;
+  #endregion
 
-  //Sounds & texture
+  #region Fields for Sounds & texture
   [KSPField]
   private string cableTexPath = "KAS/Textures/cable";
   [KSPField]
@@ -67,7 +68,9 @@ public class KASModuleWinch : KASModuleAttachCore {
   private string ejectSndPath = "KAS/Sounds/winchSmallEject";
   [KSPField]
   public string headGrabSndPath = "KAS/Sounds/grab";
+  #endregion
 
+  #region Fields for GUI
   [KSPField(guiActive = true, guiName = "Key control", guiFormat = "S")]
   public string controlField = "";
   [KSPField(guiActive = true, guiName = "Head State", guiFormat = "S")]  // SMELL: Could this be persisted?
@@ -76,18 +79,9 @@ public class KASModuleWinch : KASModuleAttachCore {
   public string winchStateField = "Idle";
   [KSPField(guiActive = true, guiName = "Length", guiFormat = "F2", guiUnits = "m")] // SMELL: Could this be persisted?
   public float lengthField = 0.0f;
+  #endregion
 
-  // FX
-  public FXGroup fxSndMotorStart;
-  public FXGroup fxSndMotor;
-  public FXGroup fxSndMotorStop;
-  public FXGroup fxSndHeadLock;
-  public FXGroup fxSndEject;
-  public FXGroup fxSndHeadGrab;
-  private Texture2D texCable;
-  public KAS_Tube tubeRenderer;
-
-  // Winch GUI
+  #region Winch GUI properties
   [KSPField(isPersistant = true)]
   public string winchName = "";
   public bool isActive = true;
@@ -97,15 +91,28 @@ public class KASModuleWinch : KASModuleAttachCore {
   public bool guiRepeatTurnLeft = false;
   public bool guiRepeatTurnRight = false;
   public bool highLightStarted = false;
+  #endregion
 
-  // Transforms
+  #region FX properties
+  public FXGroup fxSndMotorStart;
+  public FXGroup fxSndMotor;
+  public FXGroup fxSndMotorStop;
+  public FXGroup fxSndHeadLock;
+  public FXGroup fxSndEject;
+  public FXGroup fxSndHeadGrab;
+  private Texture2D texCable;
+  public KAS_Tube tubeRenderer;
+  #endregion
+
+  #region Transforms properies
   public Transform headTransform;
   public Transform headPortNode;
   private Transform winchAnchorNode;
   private Transform headAnchorNode;
   private KASModulePhysicChild headPhysicModule;
+  #endregion
 
-  // Cable control
+  #region Cable control properties
   [KSPField(isPersistant = true)]
   private bool controlActivated = true;
   [KSPField(isPersistant = true)]
@@ -115,14 +122,25 @@ public class KASModuleWinch : KASModuleAttachCore {
   public KAS_Shared.cableControl extend;
   public float motorSpeed = 0f;
   public float motorSpeedSetting;
+  #endregion
 
+  #region EVA properties
   public Part evaHolderPart = null;
   private Transform evaHeadNodeTransform;
   private Collider evaCollider;
+  #endregion
 
-  // Plug
+  #region Plug/Head properties
   public KASModulePort grabbedPortModule = null;
   private PlugState headStateVar = PlugState.Locked;
+
+  public enum PlugState
+  {
+      Locked = 0,
+      Deployed = 1,
+      PlugDocked = 2,
+      PlugUndocked = 3,
+  }
 
   public PlugState headState {
     get { return headStateVar; }
@@ -143,28 +161,26 @@ public class KASModuleWinch : KASModuleAttachCore {
     }
   }
 
+  private Vector3 headOrgLocalPos;
+  private Quaternion headOrgLocalRot;
+  private Vector3 headCurrentLocalPos;
+  private Quaternion headCurrentLocalRot;
+  #endregion
+
+  #region Connected port properties
   public PortInfo connectedPortInfo;
   public struct PortInfo {
     public KASModulePort module;
     public string savedVesselID;
     public string savedPartID;
   }
+  #endregion
+
   private bool fromSave = false;
 
   // Cable & Head
   public SpringJoint cableJoint;
-  private Vector3 headOrgLocalPos;
-  private Quaternion headOrgLocalRot;
-  private Vector3 headCurrentLocalPos;
-  private Quaternion headCurrentLocalRot;
   private float orgWinchMass;
-
-  public enum PlugState {
-    Locked = 0,
-    Deployed = 1,
-    PlugDocked = 2,
-    PlugUndocked = 3,
-  }
 
   public float cableJointLength {
     get {
