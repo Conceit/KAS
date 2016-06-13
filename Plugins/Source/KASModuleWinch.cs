@@ -78,7 +78,13 @@ public class KASModuleWinch : KASModuleAttachCore {
   [KSPField(guiActive = true, guiName = "Cable State", guiFormat = "S")]
   public string winchStateField = "Idle";
   [KSPField(guiActive = true, guiName = "Length", guiFormat = "F2", guiUnits = "m")] // SMELL: Could this be persisted?
-  public float lengthField = 0.0f;
+  public float cableJointLength {
+    get { return cableJoint ? cableJoint.maxDistance : 0; }
+    set {
+      if (cableJoint)
+        cableJoint.maxDistance = value;
+    }
+  }
   #endregion
 
   #region Winch GUI properties
@@ -181,17 +187,6 @@ public class KASModuleWinch : KASModuleAttachCore {
   // Cable & Head
   public SpringJoint cableJoint;
   private float orgWinchMass;
-
-  public float cableJointLength {
-    get {
-        return cableJoint ? cableJoint.maxDistance : 0;
-    }
-    set {
-      if (cableJoint) {
-        cableJoint.maxDistance = lengthField = value;
-      }
-    }
-  }
 
   public float cableRealLength {
     get {
