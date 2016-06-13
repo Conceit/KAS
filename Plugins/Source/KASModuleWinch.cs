@@ -1069,7 +1069,9 @@ public class KASModuleWinch : KASModuleAttachCore {
   }
 
   public void ChangePlugMode(PlugState newPlugMode) {
-    if (headState == PlugState.PlugDocked || headState == PlugState.PlugUndocked) {
+    if (   (headState == PlugState.PlugDocked   &&   newPlugMode == PlugState.PlugUndocked)
+        || (headState == PlugState.PlugUndocked &&   newPlugMode == PlugState.PlugDocked))
+    {
       KASModulePort orgPort = connectedPortInfo.module;
       UnplugHead(false);
       PlugHead(orgPort, newPlugMode, false);
