@@ -278,7 +278,7 @@ class KASAddonDebugTools : MonoBehaviour {
       confValues.Add("spring", moduleWinch.cableJoint.spring);
       confValues.Add("damper", moduleWinch.cableJoint.damper);
     }
-    confValues.Add("maxLenght", moduleWinch.maxLenght);
+    confValues.Add("maxLenght", moduleWinch.maxLength);
     confValues.Add("motorSpeed", moduleWinch.motorMaxSpeed);
     confValues.Add("winchPowerDrain", moduleWinch.powerDrain);
     confValues.Add("cableWidth", moduleWinch.cableWidth);
@@ -316,8 +316,8 @@ class KASAddonDebugTools : MonoBehaviour {
       }
     }
 
-    if (confValues["maxLenght"] != moduleWinch.maxLenght) {
-      moduleWinch.maxLenght = confValues["maxLenght"];
+    if (confValues["maxLenght"] != moduleWinch.maxLength) {
+      moduleWinch.maxLength = confValues["maxLenght"];
     }
     if (confValues["motorSpeed"] != moduleWinch.motorMaxSpeed) {
       moduleWinch.motorMaxSpeed = confValues["motorSpeed"];

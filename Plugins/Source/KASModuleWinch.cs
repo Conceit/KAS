@@ -8,7 +8,7 @@ namespace KAS {
 public class KASModuleWinch : KASModuleAttachCore {
   //Part.cfg file
   [KSPField]
-  public float maxLenght = 50.0f;
+  public float maxLength = 50.0f;
   [KSPField]
   public float cableSpring = 1000.0f;
   [KSPField]
@@ -74,7 +74,7 @@ public class KASModuleWinch : KASModuleAttachCore {
   public string headStateField = "Locked";
   [KSPField(guiActive = true, guiName = "Cable State", guiFormat = "S")]
   public string winchStateField = "Idle";
-  [KSPField(guiActive = true, guiName = "Lenght", guiFormat = "F2", guiUnits = "m")] // SMELL: Could this be persisted?
+  [KSPField(guiActive = true, guiName = "Length", guiFormat = "F2", guiUnits = "m")] // SMELL: Could this be persisted?
   public float lengthField = 0.0f;
 
   // FX
@@ -181,7 +181,7 @@ public class KASModuleWinch : KASModuleAttachCore {
     }
   }
 
-  public float cableRealLenght {
+  public float cableRealLength {
     get {
       if (cableJoint) {
         return Vector3.Distance(winchAnchorNode.position, headAnchorNode.position);
@@ -260,7 +260,7 @@ public class KASModuleWinch : KASModuleAttachCore {
   public override string GetInfo() {
     // SMELL: Who calls? Condense?
     var sb = new StringBuilder();
-    sb.AppendFormat("<b>Maximum length</b>: {0:F0}m", maxLenght);
+    sb.AppendFormat("<b>Maximum length</b>: {0:F0}m", maxLength);
     sb.AppendLine();
     sb.AppendFormat("<b>Power consumption</b>: {0:F1}", powerDrain);
     sb.AppendLine();
@@ -474,7 +474,7 @@ public class KASModuleWinch : KASModuleAttachCore {
       Deploy();
       KAS_Shared.SetPartLocalPosRotFrom(headTransform, this.part.transform,
                                         headCurrentLocalPos, headCurrentLocalRot);
-      cableJointLength = cableRealLenght;
+      cableJointLength = cableRealLength;
       fromSave = false;
     }
 
@@ -511,7 +511,7 @@ public class KASModuleWinch : KASModuleAttachCore {
 
     KAS_Shared.DebugLog("OnPartUnpack(Winch)");
     if (headState != PlugState.Locked && headTransform.GetComponent<Rigidbody>()) {
-      cableJointLength = cableRealLenght;
+      cableJointLength = cableRealLength;
     }
   }
 
@@ -578,12 +578,12 @@ public class KASModuleWinch : KASModuleAttachCore {
         motorSpeed = 0;
         winchStateField = "Released";
       }
-      float tempCablelenghtF = cableRealLenght + releaseOffset;
-      if (tempCablelenghtF > maxLenght) {
+      float tempCablelengthF = cableRealLength + releaseOffset;
+      if (tempCablelengthF > maxLength) {
         release.active = false;
-        cableJointLength = maxLenght;
+        cableJointLength = maxLength;
       } else {
-        cableJointLength = tempCablelenghtF;
+        cableJointLength = tempCablelengthF;
       }
     } else {
       if (release.isrunning) {
@@ -628,16 +628,16 @@ public class KASModuleWinch : KASModuleAttachCore {
         if (motorSpeed > motorSpeedSetting + motorAcceleration) {
           motorSpeed -= motorAcceleration;
         }
-        float tempCablelenghtE = cableJointLength + motorSpeed * TimeWarp.deltaTime;
-        if (tempCablelenghtE > maxLenght) {
+        float tempCablelengthE = cableJointLength + motorSpeed * TimeWarp.deltaTime;
+        if (tempCablelengthE > maxLength) {
           extend.full = true;
           extend.active = false;
-          cableJointLength = maxLenght;
+          cableJointLength = maxLength;
         } else {
           if (!fxSndMotor.audio.isPlaying) {
             fxSndMotor.audio.Play();
           }
-          cableJointLength = tempCablelenghtE;
+          cableJointLength = tempCablelengthE;
         }
       } else {
         if (this.part.vessel == FlightGlobals.ActiveVessel) {
@@ -680,12 +680,12 @@ public class KASModuleWinch : KASModuleAttachCore {
         if (motorSpeed > motorSpeedSetting + motorAcceleration) {
           motorSpeed -= motorAcceleration;
         }
-        float tempCableLenghtR = cableJointLength - motorSpeed * TimeWarp.deltaTime;
-        if (tempCableLenghtR > 0) {
+        float tempCableLengthR = cableJointLength - motorSpeed * TimeWarp.deltaTime;
+        if (tempCableLengthR > 0) {
           if (!fxSndMotor.audio.isPlaying) {
             fxSndMotor.audio.Play();
           }
-          cableJointLength = tempCableLenghtR;
+          cableJointLength = tempCableLengthR;
         } else {
           OnFullRetract();
         }
@@ -897,7 +897,7 @@ public class KASModuleWinch : KASModuleAttachCore {
     // Set cable joint connected body to eva
     SetCableJointConnectedBody(kerbalEvaVessel.rootPart.rb);
     headTransform.parent = evaHeadNodeTransform;
-    cableJointLength = cableRealLenght;
+    cableJointLength = cableRealLength;
 
     evaHolderPart = kerbalEvaVessel.rootPart;
     release.active = true;
@@ -921,7 +921,7 @@ public class KASModuleWinch : KASModuleAttachCore {
 
     grabbedPortModule = null;
     release.active = false;
-    cableJointLength = cableRealLenght;
+    cableJointLength = cableRealLength;
     evaHolderPart = null;
     evaHeadNodeTransform = null;
   }
@@ -1049,7 +1049,7 @@ public class KASModuleWinch : KASModuleAttachCore {
     SetHeadToPhysic(false);
     SetCableJointConnectedBody(portModule.part.rb);
     headTransform.parent = portModule.part.transform;
-    cableJointLength = cableRealLenght + 0.01f;
+    cableJointLength = cableRealLength + 0.01f;
 
     // Set variables
     connectedPortInfo.module = portModule;
@@ -1112,7 +1112,7 @@ public class KASModuleWinch : KASModuleAttachCore {
     if (headState == PlugState.Locked && ejectEnabled) {
       Deploy();
       retract.full = false;
-      cableJointLength = maxLenght;
+      cableJointLength = maxLength;
       Vector3 force = winchAnchorNode.TransformDirection(Vector3.forward) * ejectForce;
       Rigidbody rb = connectedPortInfo.module
           ? connectedPortInfo.module.part.Rigidbody
@@ -1147,7 +1147,7 @@ public class KASModuleWinch : KASModuleAttachCore {
     KAS_Shared.DebugLog(string.Format(
         "Projectile {0} has been ejected at speed {1}. Max cable length {2} will be exahusted"
         + " in {3} seconds.",
-        rb, rb.velocity.magnitude, maxLenght, maxTimeToFly));
+        rb, rb.velocity.magnitude, maxLength, maxTimeToFly));
     yield return new WaitForSeconds(maxTimeToFly + 0.5f);  // Add a delta just in case.
 
     // Restore performance mode if harpoon hasn't hit anyting.
@@ -1261,7 +1261,7 @@ public class KASModuleWinch : KASModuleAttachCore {
             guiName = "Instant Stretch")]
   public void ContextMenuCableStretch() {
     if (headState != PlugState.Locked) {
-      cableJointLength = cableRealLenght;
+      cableJointLength = cableRealLength;
     }
   }
 

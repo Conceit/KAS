@@ -236,7 +236,7 @@ public class KASAddonWinchGUI : MonoBehaviour {
         GUILayout.Label(new GUIContent(winchModule.cableJoint.maxDistance.ToString("0.00"),
                                        "Current cable length"),
                                        guiYellowStyle, GUILayout.Width(40f));
-        float strainDistance = winchModule.cableJoint.maxDistance - winchModule.cableRealLenght;
+        float strainDistance = winchModule.cableJoint.maxDistance - winchModule.cableRealLength;
         float warningPercentage = 10;
         float warningDistance = (winchModule.cableJoint.maxDistance / 100) * warningPercentage;
 

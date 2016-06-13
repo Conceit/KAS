@@ -84,7 +84,7 @@ public class KASModulePort : KASModuleAttachCore {
     }
     if (action == "DropEnd") {
       if (winchConnected) {
-        winchConnected.cableJointLength = winchConnected.cableRealLenght;
+        winchConnected.cableJointLength = winchConnected.cableRealLength;
         winchConnected.PlugHead(this, KASModuleWinch.PlugState.PlugDocked, false, false, true);
       }
     }
@@ -101,7 +101,7 @@ public class KASModulePort : KASModuleAttachCore {
     }
     if (action == "AttachEnd") {
       if (winchConnected) {
-        winchConnected.cableJointLength = winchConnected.cableRealLenght;
+        winchConnected.cableJointLength = winchConnected.cableRealLength;
       }
       if (tgtNode != null) {
         KASModuleWinch moduleWinch = tgtNode.owner.GetComponent<KASModuleWinch>();

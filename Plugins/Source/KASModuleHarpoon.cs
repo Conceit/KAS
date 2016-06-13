@@ -128,7 +128,7 @@ public class KASModuleHarpoon : KASModuleAttachCore {
     KASModuleWinch connectedWinch = KAS_Shared.GetConnectedWinch(this.part);
     if (connectedWinch) {
       MoveAbove(nearestHit.point, nearestHit.normal, aboveDist);
-      connectedWinch.cableJointLength = connectedWinch.cableRealLenght;
+      connectedWinch.cableJointLength = connectedWinch.cableRealLength;
     }
      
     if (nearestHitPart) {
