@@ -28,7 +28,7 @@ public class KASModulePort : KASModuleAttachCore {
   [KSPField]
   public string unplugDockedSndPath = "KAS/Sounds/unplugdocked";
 
-  [KSPField(isPersistant = true)]
+  [KSPField] // Persistency is handled in docker (KASModuleWinch) to avoid redundancy
   public bool plugged = false;
 
   public KASModuleWinch winchConnected;
