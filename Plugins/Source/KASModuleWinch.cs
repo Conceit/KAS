@@ -70,11 +70,11 @@ public class KASModuleWinch : KASModuleAttachCore {
 
   [KSPField(guiActive = true, guiName = "Key control", guiFormat = "S")]
   public string controlField = "";
-  [KSPField(guiActive = true, guiName = "Head State", guiFormat = "S")]
+  [KSPField(guiActive = true, guiName = "Head State", guiFormat = "S")]  // SMELL: Could this be persisted?
   public string headStateField = "Locked";
   [KSPField(guiActive = true, guiName = "Cable State", guiFormat = "S")]
   public string winchStateField = "Idle";
-  [KSPField(guiActive = true, guiName = "Lenght", guiFormat = "F2", guiUnits = "m")]
+  [KSPField(guiActive = true, guiName = "Lenght", guiFormat = "F2", guiUnits = "m")] // SMELL: Could this be persisted?
   public float lengthField = 0.0f;
 
   // FX
@@ -236,6 +236,7 @@ public class KASModuleWinch : KASModuleAttachCore {
   }
 
   public bool PlugDocked {
+    // SMELL: Condense
     get {
       if (headState == PlugState.PlugDocked) {
         return true;
@@ -257,6 +258,7 @@ public class KASModuleWinch : KASModuleAttachCore {
   }
 
   public override string GetInfo() {
+    // SMELL: Who calls? Condense?
     var sb = new StringBuilder();
     sb.AppendFormat("<b>Maximum length</b>: {0:F0}m", maxLenght);
     sb.AppendLine();
@@ -266,6 +268,8 @@ public class KASModuleWinch : KASModuleAttachCore {
   }
 
   public override void OnSave(ConfigNode node) {
+    // SMELL: Why must head position/rot be persisted? Could be persisted
+    //    by length and dockee-properties
     base.OnSave(node);
 
     if (headState != PlugState.Locked) {
@@ -291,6 +295,8 @@ public class KASModuleWinch : KASModuleAttachCore {
   }
 
   public override void OnLoad(ConfigNode node) {
+    // SMELL: Why must head position/rot be persisted? Could be persisted
+    //    by length and dockee-properties
     base.OnLoad(node);
     if (node.HasNode("Head")) {
       KAS_Shared.DebugLog("OnLoad(Winch) Loading winch head info from save...");
@@ -317,6 +323,7 @@ public class KASModuleWinch : KASModuleAttachCore {
   }
 
   public override void OnStart(StartState state) {
+    // SMELL: Large fn, refactor?
     base.OnStart(state);
     if (state == StartState.Editor || state == StartState.None) {
       return;
@@ -425,6 +432,7 @@ public class KASModuleWinch : KASModuleAttachCore {
     yield return new WaitForEndOfFrame();
 
     // Get saved port module if any
+    // SMELL: Large fn for small functionality, can be condensed?
     if (headState == PlugState.PlugDocked || headState == PlugState.PlugUndocked) {
       KAS_Shared.DebugLog("OnStart(Winch) Retrieve part with ID : " + connectedPortInfo.savedPartID
                           + " | From vessel ID : " + connectedPortInfo.savedVesselID);
@@ -446,12 +454,14 @@ public class KASModuleWinch : KASModuleAttachCore {
   }
 
   void OnVesselGoOnRails(Vessel vess) {
+    // SMELL: Remove
     if (vess != this.vessel) {
       return;
     }
   }
 
   void OnVesselGoOffRails(Vessel vess) {
+    // SMELL: Should this fn just restore state from persisted data?
     if (!fromSave || vessel.packed || (connectedPortInfo.module
                                        && connectedPortInfo.module.vessel.packed)) {
       return;
@@ -496,6 +506,7 @@ public class KASModuleWinch : KASModuleAttachCore {
   }
       
   public override void OnPartUnpack() {
+    // SMELL: When and why?
     base.OnPartUnpack();
 
     KAS_Shared.DebugLog("OnPartUnpack(Winch)");
@@ -546,6 +557,7 @@ public class KASModuleWinch : KASModuleAttachCore {
   }
 
   private void UpdateMotor() {
+    // SMELL: Refactor huge function
     #region release
     if (release.active) {
       if (headState == PlugState.Locked) {
@@ -742,6 +754,7 @@ public class KASModuleWinch : KASModuleAttachCore {
   }
 
   public void Deploy() {
+    // SMELL: What does it actually do? When is it required?
     KAS_Shared.DebugLog("Deploy(Winch) - Return head to original pos");
     KAS_Shared.SetPartLocalPosRotFrom(
         headTransform, this.part.transform, headOrgLocalPos, headOrgLocalRot);
@@ -974,6 +987,7 @@ public class KASModuleWinch : KASModuleAttachCore {
 
   public void PlugHead(KASModulePort portModule, PlugState plugMode, bool fromSave = false,
                        bool fireSound = true, bool alreadyDocked = false) {
+    // SMELL: Omnipotent function. Can be refactored to smaller parts?
     if (plugMode == PlugState.Locked || plugMode == PlugState.Deployed) {
       return;
     }
@@ -1052,6 +1066,7 @@ public class KASModuleWinch : KASModuleAttachCore {
           GameDatabase.Instance.GetAudioClip(connectedPortInfo.module.plugSndPath),
           connectedPortInfo.module.part.transform.position);
     }
+    // SMELL: Very similar to above
     if (headState == PlugState.PlugDocked) {
       Detach();
       if (fireSound) {
@@ -1072,6 +1087,7 @@ public class KASModuleWinch : KASModuleAttachCore {
   }
 
   public void TogglePlugMode() {
+    // SMELL: Similar to Changeplugmode
     if (headState == PlugState.PlugDocked) {
       ChangePlugMode(PlugState.PlugUndocked);
     } else if (headState == PlugState.PlugUndocked) {
@@ -1083,7 +1099,9 @@ public class KASModuleWinch : KASModuleAttachCore {
   }
 
   public void ChangePlugMode(PlugState newPlugMode) {
-    if (headState == PlugState.PlugDocked || headState == PlugState.PlugUndocked) {
+    // SMELL: Is just delegated from Changeplugmode?
+    if (headState == PlugState.PlugDocked || headState == PlugState.PlugUndocked)
+      {
       KASModulePort orgPort = connectedPortInfo.module;
       UnplugHead(false);
       PlugHead(orgPort, newPlugMode, false);
@@ -1177,6 +1195,7 @@ public class KASModuleWinch : KASModuleAttachCore {
   }
 
   public void RefreshControlState() {
+    // SMELL: More compact
     if (controlActivated) {
       if (controlInverted) {
         controlField = "Enabled(Inverted)";
@@ -1193,6 +1212,7 @@ public class KASModuleWinch : KASModuleAttachCore {
   }
 
   public bool CheckBlocked(bool message = false) {
+    // SMELL: What does this do?
     if (isBlocked && nodeConnectedPart && !nodeConnectedPort) {
       if (message) {
         ScreenMessages.PostScreenMessage(
@@ -1202,6 +1222,7 @@ public class KASModuleWinch : KASModuleAttachCore {
       return true;
     }
 
+    // SMELL: Falsifying the own state, may be a structural issue
     return isBlocked = false;
   }
 
