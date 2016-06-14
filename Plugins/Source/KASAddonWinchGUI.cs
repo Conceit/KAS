@@ -306,11 +306,13 @@ public class KASAddonWinchGUI : MonoBehaviour {
           || winchModule.headState == KASModuleWinch.PlugState.Locked) {
         GUI.enabled = false;
       }
-      winchModule.PlugDocked = GUILayout.Toggle(
-          winchModule.PlugDocked, new GUIContent("Docked", "Plug mode"),
-          guiButtonStyle, GUILayout.Width(60f));
+      if (winchModule.IsPlugDocked != GUILayout.Toggle(
+          winchModule.IsPlugDocked, new GUIContent("Docked", "Plug mode"),
+          guiButtonStyle, GUILayout.Width(60f))) { 
+        winchModule.TogglePlugMode();
+      }
       if (GUILayout.Button(new GUIContent("Unplug", "Unplug"),
-                           guiButtonStyle, GUILayout.Width(60f))) {
+                          guiButtonStyle, GUILayout.Width(60f))) {
         winchModule.UnplugHead();
       }
       GUI.enabled = true;

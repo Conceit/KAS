@@ -225,9 +225,8 @@ public class KASModuleWinch : KASModuleAttachCore {
     }
   }
 
-  public bool PlugDocked {
+  public bool IsPlugDocked {
     get { return (headState == PlugState.PlugDocked); }
-    set { ChangePlugMode( value ? PlugState.PlugDocked : PlugState.PlugUndocked ); }
   }
 
   public override string GetInfo() {
@@ -1051,25 +1050,66 @@ public class KASModuleWinch : KASModuleAttachCore {
   }
 
   public void TogglePlugMode() {
-    if (headState == PlugState.PlugDocked) {
-      ChangePlugMode(PlugState.PlugUndocked);
-    } else if (headState == PlugState.PlugUndocked) {
-      ChangePlugMode(PlugState.PlugDocked);
-    } else {
+
+    if (headState == PlugState.PlugDocked || headState == PlugState.PlugUndocked) {
+      PlugDocked = !PlugDocked;
+    }
+    else {
       ScreenMessages.PostScreenMessage("Cannot change plug mode while not connected !",
                                        5, ScreenMessageStyle.UPPER_CENTER);
     }
   }
 
-  public void ChangePlugMode(PlugState newPlugMode) {
-    if (   (headState == PlugState.PlugDocked   &&   newPlugMode == PlugState.PlugUndocked)
-        || (headState == PlugState.PlugUndocked &&   newPlugMode == PlugState.PlugDocked))
+    #region Private, low level plugstate functions (plugging, unplugging, docking etc)
+    // More explicit plug state handling:  
+    //
+    //  Locked <---> Deployed <---> Plugged <---> Docked
+    //
+
+    private void deployHead(bool silent = false)
     {
-      KASModulePort orgPort = connectedPortInfo.module;
-      UnplugHead(silent: true);
-      PlugHead(orgPort, newPlugMode, silent:false);
+        if (headState == PlugState.Locked)
+            Deploy();
     }
-  }
+
+    private void lockHead(bool silent = false)
+    {
+        if (headState == PlugState.Deployed)
+            Lock();
+    }
+
+    private void plugHead(KASModulePort target, bool silent = false)
+    {
+        if (headState == PlugState.Deployed)
+            PlugHead(target, PlugState.PlugUndocked, silent, false);
+    }
+
+    private void unplugHead(bool silent = false)
+    {
+        if (headState == PlugState.PlugUndocked)
+            UnplugHead(!silent);
+    }
+
+    private void dockHead(bool silent = false)
+    {
+        if (headState == PlugState.PlugUndocked)
+        {
+            KASModulePort orgPort = connectedPortInfo.module;
+            UnplugHead(silent: true);
+            PlugHead(orgPort, PlugState.PlugDocked, silent, false);
+        }
+    }
+
+    private void undockHead(bool silent = false)
+    {
+        if (headState == PlugState.PlugDocked)
+        {
+            KASModulePort orgPort = connectedPortInfo.module;
+            UnplugHead(silent: true);
+            PlugHead(orgPort, PlugState.PlugUndocked, silent, false);
+        }
+    }
+    #endregion
 
   public void Eject() {
     if (headState == PlugState.Locked && ejectEnabled) {
