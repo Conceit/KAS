@@ -182,8 +182,6 @@ public class KASModuleWinch : KASModuleAttachCore {
   }
   #endregion
 
-  private bool fromSave = false;
-
   // Cable & Head
   public SpringJoint cableJoint;
   private float orgWinchMass;
@@ -279,7 +277,6 @@ public class KASModuleWinch : KASModuleAttachCore {
       headCurrentLocalPos = KSPUtil.ParseVector3(cableNode.GetValue("headLocalPos"));
       headCurrentLocalRot = KSPUtil.ParseQuaternion(cableNode.GetValue("headLocalRot"));
       headState = PlugState.Deployed;
-      fromSave = true;
     }
 
     if (node.HasNode("PLUG")) {
@@ -293,7 +290,6 @@ public class KASModuleWinch : KASModuleAttachCore {
       if (plugNode.GetValue("type").ToString() == "undocked") {
         headState = PlugState.PlugUndocked;
       }
-      fromSave = true;
     }
   }
 
@@ -433,38 +429,32 @@ public class KASModuleWinch : KASModuleAttachCore {
 
   void OnVesselGoOffRails(Vessel vess) {
     // SMELL: Should this fn just restore state from persisted data?
-    if (!fromSave || vessel.packed || (connectedPortInfo.module
+    if (vessel.packed || (connectedPortInfo.module
                                        && connectedPortInfo.module.vessel.packed)) {
       return;
     }
 
     // From save
-    if (headState == PlugState.Deployed && fromSave) {
+    if (headState == PlugState.Deployed) {
       KAS_Shared.DebugLog("OnVesselGoOffRails(Winch) Head deployed or docked and no cable joint"
                           + " exist, re-deploy and set head position");
       Deploy();
       KAS_Shared.SetPartLocalPosRotFrom(headTransform, this.part.transform,
                                         headCurrentLocalPos, headCurrentLocalRot);
       cableJointLength = cableRealLength;
-      fromSave = false;
     }
 
-    if (headState == PlugState.PlugUndocked && fromSave) {
+    if (headState == PlugState.PlugUndocked) {
       KAS_Shared.DebugLog("OnVesselGoOffRails(Winch) From save, Plug (undocked) to : "
                           + connectedPortInfo.module.part.partInfo.title);
       PlugHead(connectedPortInfo.module, PlugState.PlugUndocked, true, false);
-      fromSave = false;
     }
 
-    if (headState == PlugState.PlugDocked && fromSave) {
+    if (headState == PlugState.PlugDocked) {
       KAS_Shared.DebugLog("OnVesselGoOffRails(Winch) From save, Plug (docked) to : "
                           + connectedPortInfo.module.part.partInfo.title);
       PlugHead(connectedPortInfo.module, PlugState.PlugDocked, true, false, true);
-      fromSave = false;
     }
-
-    // Just in case
-    fromSave = false;
   }
 
   void OnCrewBoardVessel(GameEvents.FromToAction<Part, Part> fromToAction) {
@@ -959,19 +949,25 @@ public class KASModuleWinch : KASModuleAttachCore {
   public void PlugHead(KASModulePort portModule, PlugState plugMode, bool fromSave = false,
                        bool fireSound = true, bool alreadyDocked = false) {
     // SMELL: Omnipotent function. Can be refactored to smaller parts?
+
+    // We abuse the fireSound flag to suppress warning messages as well. The flag shall be renamed to
+    // "silent" on next refactor iteration.
+
     if (plugMode == PlugState.Locked || plugMode == PlugState.Deployed) {
       return;
     }
 
-    if (!alreadyDocked && !fromSave) {
+    if (!alreadyDocked) {
       if (portModule.strutConnected()) {
-        ScreenMessages.PostScreenMessage(portModule.part.partInfo.title + " is already used !",
+        if(fireSound)
+            ScreenMessages.PostScreenMessage(portModule.part.partInfo.title + " is already used !",
                                          5, ScreenMessageStyle.UPPER_CENTER);
         return;
       }
       if (portModule.plugged) {
-        ScreenMessages.PostScreenMessage(portModule.part.partInfo.title + " is already used !",
-                                         5, ScreenMessageStyle.UPPER_CENTER);
+        if (fireSound)
+            ScreenMessages.PostScreenMessage(portModule.part.partInfo.title + " is already used !",
+                                5, ScreenMessageStyle.UPPER_CENTER);
         return;
       }
       if (this.part.vessel == portModule.part.vessel) {
