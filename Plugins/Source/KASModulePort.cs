@@ -68,7 +68,7 @@ public class KASModulePort : KASModuleAttachCore {
     base.OnPartDie();
 
     if (winchConnected) {
-      winchConnected.UnplugHead(false);
+      winchConnected.UnplugHead(silent: true);
     }
   }
 
@@ -79,13 +79,13 @@ public class KASModulePort : KASModuleAttachCore {
 
     if (action == "Store") {
       if (winchConnected) {
-        winchConnected.UnplugHead(false);
+        winchConnected.UnplugHead(silent: true);
       }
     }
     if (action == "DropEnd") {
       if (winchConnected) {
         winchConnected.cableJointLength = winchConnected.cableRealLength;
-        winchConnected.PlugHead(this, KASModuleWinch.PlugState.PlugDocked, false, false, true);
+        winchConnected.PlugHead(this, KASModuleWinch.PlugState.PlugDocked, silent: true, alreadyDocked: true);
       }
     }
     if (action == "AttachStart") {
@@ -94,7 +94,7 @@ public class KASModulePort : KASModuleAttachCore {
         if (moduleWinch && winchConnected
             && moduleWinch.headState == KASModuleWinch.PlugState.Deployed
             && tgtNode.id == moduleWinch.connectedPortNodeName) {
-          winchConnected.UnplugHead(false);
+          winchConnected.UnplugHead(silent: true);
           return;
         }
       }

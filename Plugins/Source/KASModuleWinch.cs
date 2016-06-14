@@ -447,13 +447,13 @@ public class KASModuleWinch : KASModuleAttachCore {
     if (headState == PlugState.PlugUndocked) {
       KAS_Shared.DebugLog("OnVesselGoOffRails(Winch) From save, Plug (undocked) to : "
                           + connectedPortInfo.module.part.partInfo.title);
-      PlugHead(connectedPortInfo.module, PlugState.PlugUndocked, true, false);
+      PlugHead(connectedPortInfo.module, PlugState.PlugUndocked, silent: true);
     }
 
     if (headState == PlugState.PlugDocked) {
       KAS_Shared.DebugLog("OnVesselGoOffRails(Winch) From save, Plug (docked) to : "
                           + connectedPortInfo.module.part.partInfo.title);
-      PlugHead(connectedPortInfo.module, PlugState.PlugDocked, true, false, true);
+      PlugHead(connectedPortInfo.module, PlugState.PlugDocked, silent: true, alreadyDocked: true);
     }
   }
 
@@ -491,7 +491,7 @@ public class KASModuleWinch : KASModuleAttachCore {
     if (evaHolderPart) {
       DropHead();
     } else {
-      UnplugHead(false);
+      UnplugHead(silent: true);
     }
 
     SetHeadToPhysic(false);
@@ -769,7 +769,7 @@ public class KASModuleWinch : KASModuleAttachCore {
       bool is_active = (FlightGlobals.ActiveVessel == this.vessel);
       // Decouple and re-dock
       KASModulePort tmpPortModule = connectedPortInfo.module;
-      UnplugHead(false);
+      UnplugHead(silent: true);
       KAS_Shared.MoveAlignLight(
           tmpPortModule.part.vessel, tmpPortModule.portNode, part.vessel, headPortNode);
       AttachDocked(tmpPortModule, originalVessel);
@@ -946,12 +946,9 @@ public class KASModuleWinch : KASModuleAttachCore {
     }
   }
 
-  public void PlugHead(KASModulePort portModule, PlugState plugMode, bool fromSave = false,
-                       bool fireSound = true, bool alreadyDocked = false) {
+  public void PlugHead(KASModulePort portModule, PlugState plugMode,
+                       bool silent = false, bool alreadyDocked = false) {
     // SMELL: Omnipotent function. Can be refactored to smaller parts?
-
-    // We abuse the fireSound flag to suppress warning messages as well. The flag shall be renamed to
-    // "silent" on next refactor iteration.
 
     if (plugMode == PlugState.Locked || plugMode == PlugState.Deployed) {
       return;
@@ -959,13 +956,13 @@ public class KASModuleWinch : KASModuleAttachCore {
 
     if (!alreadyDocked) {
       if (portModule.strutConnected()) {
-        if(fireSound)
+        if(!silent)
             ScreenMessages.PostScreenMessage(portModule.part.partInfo.title + " is already used !",
                                          5, ScreenMessageStyle.UPPER_CENTER);
         return;
       }
       if (portModule.plugged) {
-        if (fireSound)
+        if (!silent)
             ScreenMessages.PostScreenMessage(portModule.part.partInfo.title + " is already used !",
                                 5, ScreenMessageStyle.UPPER_CENTER);
         return;
@@ -983,7 +980,7 @@ public class KASModuleWinch : KASModuleAttachCore {
     if (plugMode == PlugState.PlugUndocked) {
       KAS_Shared.DebugLog("PlugHead(Winch) - Plug using undocked mode");
       headState = PlugState.PlugUndocked;
-      if (fireSound) {
+      if (!silent) {
         AudioSource.PlayClipAtPoint(GameDatabase.Instance.GetAudioClip(portModule.plugSndPath),
                                     portModule.part.transform.position);
       }
@@ -998,7 +995,7 @@ public class KASModuleWinch : KASModuleAttachCore {
       // Remove joints between connector and winch
       KAS_Shared.RemoveAttachJointBetween(this.part, portModule.part);
       headState = PlugState.PlugDocked;
-      if (fireSound) {
+      if (!silent) {
         AudioSource.PlayClipAtPoint(
             GameDatabase.Instance.GetAudioClip(portModule.plugDockedSndPath),
             portModule.part.transform.position);
@@ -1024,11 +1021,11 @@ public class KASModuleWinch : KASModuleAttachCore {
     portModule.winchConnected = this;
   }
 
-  public void UnplugHead(bool fireSound = true) {
+  public void UnplugHead(bool silent = false) {
     if (headState == PlugState.Locked || headState == PlugState.Deployed)
       return;
 
-    if (headState == PlugState.PlugUndocked && fireSound) {
+    if (headState == PlugState.PlugUndocked && !silent) {
       AudioSource.PlayClipAtPoint(
           GameDatabase.Instance.GetAudioClip(connectedPortInfo.module.plugSndPath),
           connectedPortInfo.module.part.transform.position);
@@ -1036,7 +1033,7 @@ public class KASModuleWinch : KASModuleAttachCore {
     // SMELL: Very similar to above
     if (headState == PlugState.PlugDocked) {
       Detach();
-      if (fireSound) {
+      if (!silent) {
         AudioSource.PlayClipAtPoint(
             GameDatabase.Instance.GetAudioClip(connectedPortInfo.module.unplugDockedSndPath),
             connectedPortInfo.module.part.transform.position);
@@ -1069,8 +1066,8 @@ public class KASModuleWinch : KASModuleAttachCore {
         || (headState == PlugState.PlugUndocked &&   newPlugMode == PlugState.PlugDocked))
     {
       KASModulePort orgPort = connectedPortInfo.module;
-      UnplugHead(false);
-      PlugHead(orgPort, newPlugMode, false);
+      UnplugHead(silent: true);
+      PlugHead(orgPort, newPlugMode, silent:false);
     }
   }
 
