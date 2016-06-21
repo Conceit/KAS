@@ -882,7 +882,7 @@ public class KASModuleWinch : KASModuleAttachCore {
                 undockHead(silent: true);
 
             if (headState == PlugState.PlugUndocked)
-                unplugHead(silent: true);
+                UnplugHead(silent: true);
 
             if (headState == PlugState.Locked)
                 deployHead(silent);
@@ -964,33 +964,13 @@ public class KASModuleWinch : KASModuleAttachCore {
             Undock(silent: true);   // This case is not tackled in the original code, so better be silent, anyhow          
     }
 
-    public void UnplugHead(bool silent = false) {
-        if (headState == PlugState.Locked || headState == PlugState.Deployed)
-            return;
+    public void UnplugHead(bool silent = false)
+    {
+      if (headState == PlugState.PlugDocked)
+        unplugHead(silent); // TODO: change to undockHead when implemented // undockHead(silent: true);
 
-        if (headState == PlugState.PlugUndocked && !silent) {
-            AudioSource.PlayClipAtPoint(
-                GameDatabase.Instance.GetAudioClip(connectedPortInfo.module.plugSndPath),
-                connectedPortInfo.module.part.transform.position);
-        }
-        // SMELL: Very similar to above
-        if (headState == PlugState.PlugDocked) {
-            Detach();
-            if (!silent) {
-            AudioSource.PlayClipAtPoint(
-                GameDatabase.Instance.GetAudioClip(connectedPortInfo.module.unplugDockedSndPath),
-                connectedPortInfo.module.part.transform.position);
-            }
-        }
-        SetHeadToPhysic(true);
-        SetCableJointConnectedBody(headTransform.GetComponent<Rigidbody>());
-
-        connectedPortInfo.module.winchConnected = null;
-        connectedPortInfo.module.nodeConnectedPart = null;
-        connectedPortInfo.module.plugged = false;
-        connectedPortInfo.module = null;
-        nodeConnectedPort = null;
-        headState = PlugState.Deployed;
+      if (headState == PlugState.PlugUndocked)
+        unplugHead(silent);
     }
 
     public void Dock(bool silent = false)
@@ -1025,8 +1005,8 @@ public class KASModuleWinch : KASModuleAttachCore {
     }
     #endregion
 
-        #region Private, low level plugstate functions (plugging, unplugging, docking etc)
-        private void deployHead(bool silent = false)
+    #region Private, low level plugstate functions (plugging, unplugging, docking etc)
+    private void deployHead(bool silent = false)
     {
         KAS_Shared.DebugLog("Deploy(Winch) - Return head to original pos");
         KAS_Shared.SetPartLocalPosRotFrom(
@@ -1148,12 +1128,6 @@ public class KASModuleWinch : KASModuleAttachCore {
         target.winchConnected = this;
     }
 
-    private void unplugHead(bool silent = false)
-    {
-        if (headState == PlugState.PlugUndocked)
-            UnplugHead(!silent);
-    }
-
     private void dockHead(bool silent = false)
     {
         KASModulePort target = connectedPortInfo.module;
@@ -1179,12 +1153,44 @@ public class KASModuleWinch : KASModuleAttachCore {
     private void undockHead(bool silent = false)
     {
         KASModulePort orgPort = connectedPortInfo.module;
+        // Smell: implement undock behaviour
         UnplugHead(silent: true);
         PlugHead(orgPort, PlugState.PlugUndocked, silent, false);
     }
+
+    private void unplugHead(bool silent = false)
+    {
+      if (headState == PlugState.PlugUndocked && !silent)
+      {
+        AudioSource.PlayClipAtPoint(
+            GameDatabase.Instance.GetAudioClip(connectedPortInfo.module.plugSndPath),
+            connectedPortInfo.module.part.transform.position);
+      }
+      // SMELL: Very similar to above
+      if (headState == PlugState.PlugDocked)
+      {
+        Detach();
+        if (!silent)
+        {
+          AudioSource.PlayClipAtPoint(
+              GameDatabase.Instance.GetAudioClip(connectedPortInfo.module.unplugDockedSndPath),
+              connectedPortInfo.module.part.transform.position);
+        }
+      }
+      SetHeadToPhysic(true);
+      SetCableJointConnectedBody(headTransform.GetComponent<Rigidbody>());
+
+      connectedPortInfo.module.winchConnected = null;
+      connectedPortInfo.module.nodeConnectedPart = null;
+      connectedPortInfo.module.plugged = false;
+      connectedPortInfo.module = null;
+      nodeConnectedPort = null;
+      headState = PlugState.Deployed;
+    }
+
     #endregion
 
-  public void Eject() {
+    public void Eject() {
     if (headState == PlugState.Locked && ejectEnabled) {
       Deploy();
       retract.full = false;
