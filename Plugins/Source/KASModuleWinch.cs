@@ -934,14 +934,10 @@ public class KASModuleWinch : KASModuleAttachCore {
             }
         }
 
-        /* FIX: This might be still an issue! Check when this can happen, and if 
-            * it is already tackled by deployHead downside. */
+        // If the vessel was just loaded, creation of the cablejoint might be required */
         if (!cableJoint)
-        {
-            Deploy();
-        }
+          createCableJoint();
         
-
         // Probably Little Jebediah is having his fingers on that part. So drop it.
         DropHead();
 
@@ -1006,6 +1002,21 @@ public class KASModuleWinch : KASModuleAttachCore {
     #endregion
 
     #region Private, low level plugstate functions (plugging, unplugging, docking etc)
+
+    private void createCableJoint()
+    {
+      KAS_Shared.DebugLog("Deploy(Winch) - Create spring joint");
+      cableJoint = this.part.gameObject.AddComponent<SpringJoint>();
+      cableJoint.connectedBody = headTransform.GetComponent<Rigidbody>();
+      cableJoint.maxDistance = 0;
+      cableJoint.minDistance = 0;
+      cableJoint.spring = cableSpring;
+      cableJoint.damper = cableDamper;
+      cableJoint.breakForce = 999;
+      cableJoint.breakTorque = 999;
+      cableJoint.anchor = winchAnchorNode.localPosition;
+    }
+
     private void deployHead(bool silent = false)
     {
         KAS_Shared.DebugLog("Deploy(Winch) - Return head to original pos");
@@ -1024,22 +1035,10 @@ public class KASModuleWinch : KASModuleAttachCore {
             KAS_Shared.DebugWarning("Deploy(Winch) - Mass of the head is greater than the winch !");
         }
 
-        KAS_Shared.DebugLog("Deploy(Winch) - Create spring joint");
-        cableJoint = this.part.gameObject.AddComponent<SpringJoint>();
-        cableJoint.connectedBody = headTransform.GetComponent<Rigidbody>();
-        cableJoint.maxDistance = 0;
-        cableJoint.minDistance = 0;
-        cableJoint.spring = cableSpring;
-        cableJoint.damper = cableDamper;
-        cableJoint.breakForce = 999;
-        cableJoint.breakTorque = 999;
-        cableJoint.anchor = winchAnchorNode.localPosition;
+        createCableJoint();
 
-        if (nodeConnectedPort)
-        {
-            KAS_Shared.DebugLog("Deploy(Winch) - Connected port detected, plug head in docked mode...");
-            nodeConnectedPort.nodeConnectedPart = null;
-
+        if(nodeConnectedPort) 
+        { 
             /* Use internal functions! public Plughead(..) will call deploy again, as we are still "locked" (recursion, stack overflow) */
             plugHead(nodeConnectedPort, silent: true);
 
