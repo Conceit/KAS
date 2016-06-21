@@ -713,83 +713,6 @@ public class KASModuleWinch : KASModuleAttachCore {
     }
   }
 
-  public void Deploy() {
-    // SMELL: What does it actually do? When is it required?
-    KAS_Shared.DebugLog("Deploy(Winch) - Return head to original pos");
-    KAS_Shared.SetPartLocalPosRotFrom(
-        headTransform, this.part.transform, headOrgLocalPos, headOrgLocalRot);
-
-    SetHeadToPhysic(true);
-    orgWinchMass = this.part.mass;
-    float newMass = this.part.mass - headMass;
-    if (newMass > 0) {
-      this.part.mass = newMass;
-    } else {
-      KAS_Shared.DebugWarning("Deploy(Winch) - Mass of the head is greater than the winch !");
-    }
-
-    KAS_Shared.DebugLog("Deploy(Winch) - Create spring joint");
-    cableJoint = this.part.gameObject.AddComponent<SpringJoint>();
-    cableJoint.connectedBody = headTransform.GetComponent<Rigidbody>();
-    cableJoint.maxDistance = 0;
-    cableJoint.minDistance = 0;
-    cableJoint.spring = cableSpring;
-    cableJoint.damper = cableDamper;
-    cableJoint.breakForce = 999;
-    cableJoint.breakTorque = 999;
-    cableJoint.anchor = winchAnchorNode.localPosition;
-
-    if (nodeConnectedPort) {
-      KAS_Shared.DebugLog("Deploy(Winch) - Connected port detected, plug head in docked mode...");
-      nodeConnectedPort.nodeConnectedPart = null;
-      PlugHead(nodeConnectedPort, PlugState.PlugDocked, alreadyDocked: true);
-    } else {
-      KAS_Shared.DebugLog("Deploy(Winch) - Deploy connector only...");
-      headState = PlugState.Deployed;
-    }
-
-    nodeConnectedPort = null;
-    KAS_Shared.DebugLog("Deploy(Winch) - Enable tube renderer");
-    SetTubeRenderer(true);
-  }
-
-  public void Lock() {
-    if (cableJoint) {
-      KAS_Shared.DebugLog("Lock(Winch) Removing spring joint");
-      Destroy(cableJoint);
-    }
-    KAS_Shared.SetPartLocalPosRotFrom(
-        headTransform, this.part.transform, headOrgLocalPos, headOrgLocalRot);
-
-    if (headState == PlugState.PlugDocked || headState == PlugState.PlugUndocked) {
-      KAS_Shared.DebugLog("Lock(Winch) Dock connected port");
-      // Save control state
-      Vessel originalVessel = this.vessel;
-      bool is_active = (FlightGlobals.ActiveVessel == this.vessel);
-      // Decouple and re-dock
-      KASModulePort tmpPortModule = connectedPortInfo.module;
-      UnplugHead(silent: true);
-      KAS_Shared.MoveAlignLight(
-          tmpPortModule.part.vessel, tmpPortModule.portNode, part.vessel, headPortNode);
-      AttachDocked(tmpPortModule, originalVessel);
-      nodeConnectedPort = tmpPortModule;
-      tmpPortModule.nodeConnectedPart = this.part;
-      // Restore controls and focus
-      if (is_active) {
-        FlightGlobals.ForceSetActiveVessel(this.vessel);
-        FlightInputHandler.ResumeVesselCtrlState(this.vessel);
-      }
-    }
-    SetHeadToPhysic(false);
-    this.part.mass = orgWinchMass;
-
-    SetTubeRenderer(false);
-    motorSpeed = 0;
-    cableJoint = null;
-    headState = PlugState.Locked;
-    fxSndHeadLock.audio.Play();
-  }
-
   public void SetTubeRenderer(bool activated) {
     if (activated) {
       // loading strut renderer
@@ -945,143 +868,284 @@ public class KASModuleWinch : KASModuleAttachCore {
     }
   }
 
-  public void PlugHead(KASModulePort portModule, PlugState plugMode,
-                       bool silent = false, bool alreadyDocked = false) {
-    // SMELL: Omnipotent function. Can be refactored to smaller parts?
+        #region Public high level plug state functions
 
-    if (plugMode == PlugState.Locked || plugMode == PlugState.Deployed) {
-      return;
-    }
+        // Plug state handling:  
+        //
+        //  Deployed <---> Plugged <---> Docked
+        //
+        //    any <---> locked <---> any   
 
-    if (!alreadyDocked) {
-      if (portModule.strutConnected()) {
-        if(!silent)
-            ScreenMessages.PostScreenMessage(portModule.part.partInfo.title + " is already used !",
-                                         5, ScreenMessageStyle.UPPER_CENTER);
-        return;
-      }
-      if (portModule.plugged) {
-        if (!silent)
-            ScreenMessages.PostScreenMessage(portModule.part.partInfo.title + " is already used !",
-                                5, ScreenMessageStyle.UPPER_CENTER);
-        return;
-      }
-      if (this.part.vessel == portModule.part.vessel) {
-        plugMode = PlugState.PlugUndocked;
-      }
-    }
+        public void Deploy(bool silent = false)
+        {
+            if (headState == PlugState.PlugDocked)
+                undockHead(silent: true);
 
-    if (!cableJoint) {
-      Deploy();
-    }
-    DropHead();
-          
-    if (plugMode == PlugState.PlugUndocked) {
-      KAS_Shared.DebugLog("PlugHead(Winch) - Plug using undocked mode");
-      headState = PlugState.PlugUndocked;
-      if (!silent) {
-        AudioSource.PlayClipAtPoint(GameDatabase.Instance.GetAudioClip(portModule.plugSndPath),
-                                    portModule.part.transform.position);
-      }
-    }
-    if (plugMode == PlugState.PlugDocked) {
-      KAS_Shared.DebugLog("PlugHead(Winch) - Plug using docked mode");
-      // This should be safe even if already connected
-      AttachDocked(portModule);
-      // Set attached part
-      portModule.part.findAttachNode(portModule.attachNode).attachedPart = this.part;
-      this.part.findAttachNode(connectedPortNodeName).attachedPart = portModule.part;
-      // Remove joints between connector and winch
-      KAS_Shared.RemoveAttachJointBetween(this.part, portModule.part);
-      headState = PlugState.PlugDocked;
-      if (!silent) {
-        AudioSource.PlayClipAtPoint(
-            GameDatabase.Instance.GetAudioClip(portModule.plugDockedSndPath),
-            portModule.part.transform.position);
-      }
-      // Kerbal Joint Reinforcement compatibility
-      GameEvents.onPartUndock.Fire(portModule.part);
-    }
+            if (headState == PlugState.PlugUndocked)
+                unplugHead(silent: true);
 
-    KAS_Shared.DebugLog("PlugHead(Winch) - Moving head...");
-    headTransform.rotation =
-        Quaternion.FromToRotation(headPortNode.forward, -portModule.portNode.forward)
-        * headTransform.rotation;
-    headTransform.position =
-        headTransform.position - (headPortNode.position - portModule.portNode.position);
-    SetHeadToPhysic(false);
-    SetCableJointConnectedBody(portModule.part.rb);
-    headTransform.parent = portModule.part.transform;
-    cableJointLength = cableRealLength + 0.01f;
+            if (headState == PlugState.Locked)
+                deployHead(silent);
+        }
 
-    // Set variables
-    connectedPortInfo.module = portModule;
-    connectedPortInfo.module.plugged = true;
-    portModule.winchConnected = this;
-  }
+        public void Lock()
+        {
+            // The head can be in any state prior to low-level lockHead, as 
+            // locking a docked or plugged port results in aligning and docking 
+            // two vessels (e.g. the winch pulls-in another vessel)
+            if(headState != PlugState.Locked)
+                lockHead();
+        }
 
-  public void UnplugHead(bool silent = false) {
-    if (headState == PlugState.Locked || headState == PlugState.Deployed)
-      return;
+    /// <summary>
+    /// Will plug or dock the head to a port. The interface signature
+    /// is kept for historic reasons and is object to change soon.
+    /// </summary>
+    /// <param name="portModule">the port to connect to</param>
+    /// <param name="plugMode">either PlugState.Docked or plugStateUndocked</param>
+    /// <param name="silent">suppress sounds and messages</param>
+    /// <param name="alreadyDocked">??</param>
+    public void PlugHead(KASModulePort portModule, PlugState plugMode,
+                    bool silent = false, bool alreadyDocked = false) {
+    
+        // Don't do nothing else...
+        if (plugMode == PlugState.Locked || plugMode == PlugState.Deployed)
+            return;
 
-    if (headState == PlugState.PlugUndocked && !silent) {
-      AudioSource.PlayClipAtPoint(
-          GameDatabase.Instance.GetAudioClip(connectedPortInfo.module.plugSndPath),
-          connectedPortInfo.module.part.transform.position);
-    }
-    // SMELL: Very similar to above
-    if (headState == PlugState.PlugDocked) {
-      Detach();
-      if (!silent) {
-        AudioSource.PlayClipAtPoint(
-            GameDatabase.Instance.GetAudioClip(connectedPortInfo.module.unplugDockedSndPath),
-            connectedPortInfo.module.part.transform.position);
-      }
-    }
-    SetHeadToPhysic(true);
-    SetCableJointConnectedBody(headTransform.GetComponent<Rigidbody>());
+        /*
+            * FIX: Understand alreadyDocked flag
+            */
 
-    connectedPortInfo.module.winchConnected = null;
-    connectedPortInfo.module.nodeConnectedPart = null;
-    connectedPortInfo.module.plugged = false;
-    connectedPortInfo.module = null;
-    nodeConnectedPort = null;
-    headState = PlugState.Deployed;
-  }
+        if (!alreadyDocked) {
+            if (portModule.strutConnected()) {
+            if(!silent)
+                ScreenMessages.PostScreenMessage(portModule.part.partInfo.title + " is already used !",
+                                                5, ScreenMessageStyle.UPPER_CENTER);
+                return;
+            }
+            if (portModule.plugged) {
+            if (!silent)
+                ScreenMessages.PostScreenMessage(portModule.part.partInfo.title + " is already used !",
+                                    5, ScreenMessageStyle.UPPER_CENTER);
+                return;
+            }
+            if (this.part.vessel == portModule.part.vessel) {
+                plugMode = PlugState.PlugUndocked;
+            }
+        }
 
-  public void TogglePlugMode() {
-
-    if (headState == PlugState.PlugDocked || headState == PlugState.PlugUndocked) {
-      PlugDocked = !PlugDocked;
-    }
-    else {
-      ScreenMessages.PostScreenMessage("Cannot change plug mode while not connected !",
-                                       5, ScreenMessageStyle.UPPER_CENTER);
-    }
-  }
-
-    #region Private, low level plugstate functions (plugging, unplugging, docking etc)
-    // More explicit plug state handling:  
-    //
-    //  Locked <---> Deployed <---> Plugged <---> Docked
-    //
-
-    private void deployHead(bool silent = false)
-    {
-        if (headState == PlugState.Locked)
+        /* FIX: This might be still an issue! Check when this can happen, and if 
+            * it is already tackled by deployHead downside. */
+        if (!cableJoint)
+        {
             Deploy();
+        }
+        
+
+        // Probably Little Jebediah is having his fingers on that part. So drop it.
+        DropHead();
+
+        // Run through the deploy/plug/dock states
+
+        // Deploy first, if locked
+        if (headState == PlugState.Locked)
+            Deploy(silent: true);
+
+        // Now, plug that thing.
+        if (headState == PlugState.Deployed)
+            plugHead(portModule, silent: (plugMode != PlugState.PlugUndocked)); // don't be silent if this is the targeted mode
+
+        // If required, additionally dock it
+        if (plugMode == PlugState.PlugDocked)
+            Dock(silent: true);
+
+        // If it was already docked, simply undock it.
+        if (headState == PlugState.PlugDocked && plugMode == PlugState.PlugUndocked)
+            Undock(silent: true);   // This case is not tackled in the original code, so better be silent, anyhow          
+    }
+
+    public void UnplugHead(bool silent = false) {
+        if (headState == PlugState.Locked || headState == PlugState.Deployed)
+            return;
+
+        if (headState == PlugState.PlugUndocked && !silent) {
+            AudioSource.PlayClipAtPoint(
+                GameDatabase.Instance.GetAudioClip(connectedPortInfo.module.plugSndPath),
+                connectedPortInfo.module.part.transform.position);
+        }
+        // SMELL: Very similar to above
+        if (headState == PlugState.PlugDocked) {
+            Detach();
+            if (!silent) {
+            AudioSource.PlayClipAtPoint(
+                GameDatabase.Instance.GetAudioClip(connectedPortInfo.module.unplugDockedSndPath),
+                connectedPortInfo.module.part.transform.position);
+            }
+        }
+        SetHeadToPhysic(true);
+        SetCableJointConnectedBody(headTransform.GetComponent<Rigidbody>());
+
+        connectedPortInfo.module.winchConnected = null;
+        connectedPortInfo.module.nodeConnectedPart = null;
+        connectedPortInfo.module.plugged = false;
+        connectedPortInfo.module = null;
+        nodeConnectedPort = null;
+        headState = PlugState.Deployed;
+    }
+
+    public void Dock(bool silent = false)
+    {
+        KASModulePort target = connectedPortInfo.module;
+        if (
+                target && target.part && this.part 
+                && (this.part.vessel != target.part.vessel) // don't dock same vessel!
+                && (headState == PlugState.PlugUndocked)    // only dock plugged vessels
+            )
+        {
+            dockHead(silent);
+        }
+    }
+
+    public void Undock(bool silent = false)
+    {
+        if (headState == PlugState.PlugDocked)
+            undockHead(silent);
+    }
+
+    public void TogglePlugMode() {
+      if (headState == PlugState.PlugDocked)
+        undockHead();
+      else if (headState == PlugState.PlugUndocked)
+        Dock();
+      else
+      {
+        ScreenMessages.PostScreenMessage("Cannot change plug mode while not connected !",
+                                        5, ScreenMessageStyle.UPPER_CENTER);
+      }
+    }
+    #endregion
+
+        #region Private, low level plugstate functions (plugging, unplugging, docking etc)
+        private void deployHead(bool silent = false)
+    {
+        KAS_Shared.DebugLog("Deploy(Winch) - Return head to original pos");
+        KAS_Shared.SetPartLocalPosRotFrom(
+            headTransform, this.part.transform, headOrgLocalPos, headOrgLocalRot);
+
+        SetHeadToPhysic(true);
+        orgWinchMass = this.part.mass;
+        float newMass = this.part.mass - headMass;
+        if (newMass > 0)
+        {
+            this.part.mass = newMass;
+        }
+        else
+        {
+            KAS_Shared.DebugWarning("Deploy(Winch) - Mass of the head is greater than the winch !");
+        }
+
+        KAS_Shared.DebugLog("Deploy(Winch) - Create spring joint");
+        cableJoint = this.part.gameObject.AddComponent<SpringJoint>();
+        cableJoint.connectedBody = headTransform.GetComponent<Rigidbody>();
+        cableJoint.maxDistance = 0;
+        cableJoint.minDistance = 0;
+        cableJoint.spring = cableSpring;
+        cableJoint.damper = cableDamper;
+        cableJoint.breakForce = 999;
+        cableJoint.breakTorque = 999;
+        cableJoint.anchor = winchAnchorNode.localPosition;
+
+        if (nodeConnectedPort)
+        {
+            KAS_Shared.DebugLog("Deploy(Winch) - Connected port detected, plug head in docked mode...");
+            nodeConnectedPort.nodeConnectedPart = null;
+
+            /* Use internal functions! public Plughead(..) will call deploy again, as we are still "locked" (recursion, stack overflow) */
+            plugHead(nodeConnectedPort, silent: true);
+
+            /* Use internal functions! public Dock(..) will check for same vessel (true here) and do nothing. */
+            dockHead(silent: false);
+        }
+        else
+        {
+            KAS_Shared.DebugLog("Deploy(Winch) - Deploy connector only...");
+            headState = PlugState.Deployed;
+        }
+
+        nodeConnectedPort = null;
+        KAS_Shared.DebugLog("Deploy(Winch) - Enable tube renderer");
+        SetTubeRenderer(true);
     }
 
     private void lockHead(bool silent = false)
     {
-        if (headState == PlugState.Deployed)
-            Lock();
+        if (cableJoint)
+        {
+            KAS_Shared.DebugLog("Lock(Winch) Removing spring joint");
+            Destroy(cableJoint);
+        }
+        KAS_Shared.SetPartLocalPosRotFrom(
+        headTransform, this.part.transform, headOrgLocalPos, headOrgLocalRot);
+
+        if (headState == PlugState.PlugDocked || headState == PlugState.PlugUndocked)
+        {
+            KAS_Shared.DebugLog("Lock(Winch) Dock connected port");
+            // Save control state
+            Vessel originalVessel = this.vessel;
+            bool is_active = (FlightGlobals.ActiveVessel == this.vessel);
+            // Decouple and re-dock
+            KASModulePort tmpPortModule = connectedPortInfo.module;
+            UnplugHead(silent: true);
+            KAS_Shared.MoveAlignLight(
+                tmpPortModule.part.vessel, tmpPortModule.portNode, part.vessel, headPortNode);
+            AttachDocked(tmpPortModule, originalVessel);
+            nodeConnectedPort = tmpPortModule;
+            tmpPortModule.nodeConnectedPart = this.part;
+            // Restore controls and focus
+            if (is_active)
+            {
+                FlightGlobals.ForceSetActiveVessel(this.vessel);
+                FlightInputHandler.ResumeVesselCtrlState(this.vessel);
+            }
+        }
+
+        SetHeadToPhysic(false);
+        this.part.mass = orgWinchMass;
+
+        SetTubeRenderer(false);
+        motorSpeed = 0;
+        cableJoint = null;
+        headState = PlugState.Locked;
+
+        if (!silent)
+            fxSndHeadLock.audio.Play();
     }
 
     private void plugHead(KASModulePort target, bool silent = false)
     {
-        if (headState == PlugState.Deployed)
-            PlugHead(target, PlugState.PlugUndocked, silent, false);
+        KAS_Shared.DebugLog("PlugHead(Winch) - Plug using undocked mode");
+        headState = PlugState.PlugUndocked;
+        if (!silent)
+        {
+            AudioSource.PlayClipAtPoint(GameDatabase.Instance.GetAudioClip(target.plugSndPath),
+                                        target.part.transform.position);
+        }
+
+        KAS_Shared.DebugLog("PlugHead(Winch) - Moving head...");
+        headTransform.rotation =
+            Quaternion.FromToRotation(headPortNode.forward, -target.portNode.forward)
+            * headTransform.rotation;
+        headTransform.position =
+            headTransform.position - (headPortNode.position - target.portNode.position);
+        SetHeadToPhysic(false);
+        SetCableJointConnectedBody(target.part.rb);
+        headTransform.parent = target.part.transform;
+        cableJointLength = cableRealLength + 0.01f;
+
+        // Set variables
+        connectedPortInfo.module = target;
+        connectedPortInfo.module.plugged = true;
+        target.winchConnected = this;
     }
 
     private void unplugHead(bool silent = false)
@@ -1092,22 +1156,31 @@ public class KASModuleWinch : KASModuleAttachCore {
 
     private void dockHead(bool silent = false)
     {
-        if (headState == PlugState.PlugUndocked)
+        KASModulePort target = connectedPortInfo.module;
+        KAS_Shared.DebugLog("PlugHead(Winch) - Plug using docked mode");
+        // This should be safe even if already connected
+        AttachDocked(target);
+        // Set attached part
+        target.part.findAttachNode(target.attachNode).attachedPart = this.part;
+        this.part.findAttachNode(connectedPortNodeName).attachedPart = target.part;
+        // Remove joints between connector and winch
+        KAS_Shared.RemoveAttachJointBetween(this.part, target.part);
+        headState = PlugState.PlugDocked;
+        if (!silent)
         {
-            KASModulePort orgPort = connectedPortInfo.module;
-            UnplugHead(silent: true);
-            PlugHead(orgPort, PlugState.PlugDocked, silent, false);
+            AudioSource.PlayClipAtPoint(
+                GameDatabase.Instance.GetAudioClip(target.plugDockedSndPath),
+                target.part.transform.position);
         }
+        // Kerbal Joint Reinforcement compatibility
+        GameEvents.onPartUndock.Fire(target.part);
     }
 
     private void undockHead(bool silent = false)
     {
-        if (headState == PlugState.PlugDocked)
-        {
-            KASModulePort orgPort = connectedPortInfo.module;
-            UnplugHead(silent: true);
-            PlugHead(orgPort, PlugState.PlugUndocked, silent, false);
-        }
+        KASModulePort orgPort = connectedPortInfo.module;
+        UnplugHead(silent: true);
+        PlugHead(orgPort, PlugState.PlugUndocked, silent, false);
     }
     #endregion
 
