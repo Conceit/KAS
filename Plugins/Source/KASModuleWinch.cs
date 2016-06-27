@@ -882,7 +882,7 @@ public class KASModuleWinch : KASModuleAttachCore {
                 undockHead(silent: true);
 
             if (headState == PlugState.PlugUndocked)
-                UnplugHead(silent: true);
+                unplugHead(silent: true);
 
             if (headState == PlugState.Locked)
                 deployHead(silent);
@@ -963,7 +963,7 @@ public class KASModuleWinch : KASModuleAttachCore {
     public void UnplugHead(bool silent = false)
     {
       if (headState == PlugState.PlugDocked)
-        unplugHead(silent); // TODO: change to undockHead when implemented // undockHead(silent: true);
+        undockHead(silent: true);
 
       if (headState == PlugState.PlugUndocked)
         unplugHead(silent);
@@ -1151,23 +1151,6 @@ public class KASModuleWinch : KASModuleAttachCore {
 
     private void undockHead(bool silent = false)
     {
-        KASModulePort orgPort = connectedPortInfo.module;
-        // Smell: implement undock behaviour
-        UnplugHead(silent: true);
-        PlugHead(orgPort, PlugState.PlugUndocked, silent, false);
-    }
-
-    private void unplugHead(bool silent = false)
-    {
-      if (headState == PlugState.PlugUndocked && !silent)
-      {
-        AudioSource.PlayClipAtPoint(
-            GameDatabase.Instance.GetAudioClip(connectedPortInfo.module.plugSndPath),
-            connectedPortInfo.module.part.transform.position);
-      }
-      // SMELL: Very similar to above
-      if (headState == PlugState.PlugDocked)
-      {
         Detach();
         if (!silent)
         {
@@ -1175,6 +1158,16 @@ public class KASModuleWinch : KASModuleAttachCore {
               GameDatabase.Instance.GetAudioClip(connectedPortInfo.module.unplugDockedSndPath),
               connectedPortInfo.module.part.transform.position);
         }
+        headState = PlugState.PlugUndocked;
+    }
+
+    private void unplugHead(bool silent = false)
+    {
+      if (!silent)
+      {
+        AudioSource.PlayClipAtPoint(
+            GameDatabase.Instance.GetAudioClip(connectedPortInfo.module.plugSndPath),
+            connectedPortInfo.module.part.transform.position);
       }
       SetHeadToPhysic(true);
       SetCableJointConnectedBody(headTransform.GetComponent<Rigidbody>());
