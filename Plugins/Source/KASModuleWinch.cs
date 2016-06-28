@@ -180,6 +180,103 @@ public class KASModuleWinch : KASModuleAttachCore {
     public string savedVesselID;
     public string savedPartID;
   }
+    #endregion
+
+  #region Persistent data
+  protected class PersistentData
+  {
+    private PlugState headState = PlugState.Deployed;
+    private Vector3 headLocalPos;
+    private Quaternion headLocalRot;
+    private string vesselID;
+    private string partID;
+
+    /// <summary>
+    /// Copy persistent data to the winch
+    /// </summary>
+    /// <param name="winch"></param>
+    public void RestoreWinch(KASModuleWinch winch) {
+        winch.headState = headState;
+        winch.headCurrentLocalPos = headLocalPos;
+        winch.headCurrentLocalRot = headLocalRot;
+        winch.connectedPortInfo.savedVesselID = vesselID;
+        winch.connectedPortInfo.savedPartID = partID;
+    }
+
+    /// <summary>
+    /// Copy the winch's persistent data to this structure
+    /// </summary>
+    /// <param name="winch"></param>
+    public void UpdatePersistentData(KASModuleWinch winch) {
+      headState = winch.headState;
+      headLocalPos = KAS_Shared.GetLocalPosFrom(winch.headTransform, winch.part.transform);
+      headLocalRot = KAS_Shared.GetLocalRotFrom(winch.headTransform, winch.part.transform);
+      vesselID = winch.connectedPortInfo.module.vessel.id.ToString();
+      partID = winch.connectedPortInfo.module.part.flightID.ToString();
+    }
+    
+    /// <summary>
+    /// Load persistent data from file. You might want to call RestoreWinch afterwards.
+    /// </summary>
+    /// <param name="node"></param>          
+    public void OnLoad(ConfigNode node) {
+      if (node.HasNode("Head"))
+      {
+        KAS_Shared.DebugLog("OnLoad(Winch) Loading winch head info from save...");
+        ConfigNode cableNode = node.GetNode("Head");
+        headLocalPos = KSPUtil.ParseVector3(cableNode.GetValue("headLocalPos"));
+        headLocalRot = KSPUtil.ParseQuaternion(cableNode.GetValue("headLocalRot"));
+        headState = PlugState.Deployed;
+      }
+
+      if (node.HasNode("PLUG"))
+      {
+        KAS_Shared.DebugLog("OnLoad(Winch) Loading plug info from save...");
+        ConfigNode plugNode = node.GetNode("PLUG");
+        vesselID = plugNode.GetValue("vesselId").ToString();
+        partID = plugNode.GetValue("partId").ToString();
+        if (plugNode.GetValue("type").ToString() == "docked")
+        {
+          headState = PlugState.PlugDocked;
+        }
+        if (plugNode.GetValue("type").ToString() == "undocked")
+        {
+          headState = PlugState.PlugUndocked;
+        }
+      }
+    }
+
+    /// <summary>
+    /// Save persistent data to a file. You might want to call UpdatePersistentData before.
+    /// </summary>
+    /// <param name="node"></param>
+    public void OnSave(ConfigNode node) {
+      if (headState != PlugState.Locked)
+      {
+        KAS_Shared.DebugLog("OnSave(Winch) Winch head deployed, saving info...");
+        ConfigNode cableNode = node.AddNode("Head");
+        cableNode.AddValue(
+            "headLocalPos",
+            KSPUtil.WriteVector(headLocalPos));
+        cableNode.AddValue(
+            "headLocalRot",
+            KSPUtil.WriteQuaternion(headLocalRot));
+      }
+
+      if (headState == PlugState.PlugDocked || headState == PlugState.PlugUndocked)
+      {
+        ConfigNode plugNode = node.AddNode("PLUG");
+        if (headState == PlugState.PlugDocked)
+          plugNode.AddValue("type", "docked");
+        if (headState == PlugState.PlugUndocked)
+          plugNode.AddValue("type", "undocked");
+        plugNode.AddValue("vesselId", vesselID);
+        plugNode.AddValue("partId", partID);
+      }
+    }
+  }
+
+  private PersistentData persistentData = new PersistentData();
   #endregion
 
   // Cable & Head
@@ -243,53 +340,16 @@ public class KASModuleWinch : KASModuleAttachCore {
     // SMELL: Why must head position/rot be persisted? Could be persisted
     //    by length and dockee-properties
     base.OnSave(node);
-
-    if (headState != PlugState.Locked) {
-      KAS_Shared.DebugLog("OnSave(Winch) Winch head deployed, saving info...");
-      ConfigNode cableNode = node.AddNode("Head");
-      cableNode.AddValue(
-          "headLocalPos",
-          KSPUtil.WriteVector(KAS_Shared.GetLocalPosFrom(headTransform, this.part.transform)));
-      cableNode.AddValue(
-          "headLocalRot",
-          KSPUtil.WriteQuaternion(KAS_Shared.GetLocalRotFrom(headTransform, this.part.transform)));
-    }
-
-    if (headState == PlugState.PlugDocked || headState == PlugState.PlugUndocked) {
-      ConfigNode plugNode = node.AddNode("PLUG");
-      if (headState == PlugState.PlugDocked)
-        plugNode.AddValue("type", "docked");
-      if (headState == PlugState.PlugUndocked)
-        plugNode.AddValue("type", "undocked");
-      plugNode.AddValue("vesselId", connectedPortInfo.module.vessel.id.ToString());
-      plugNode.AddValue("partId", connectedPortInfo.module.part.flightID.ToString());
-    }
+    persistentData.UpdatePersistentData(this);
+    persistentData.OnSave(node);
   }
 
   public override void OnLoad(ConfigNode node) {
     // SMELL: Why must head position/rot be persisted? Could be persisted
     //    by length and dockee-properties
     base.OnLoad(node);
-    if (node.HasNode("Head")) {
-      KAS_Shared.DebugLog("OnLoad(Winch) Loading winch head info from save...");
-      ConfigNode cableNode = node.GetNode("Head");
-      headCurrentLocalPos = KSPUtil.ParseVector3(cableNode.GetValue("headLocalPos"));
-      headCurrentLocalRot = KSPUtil.ParseQuaternion(cableNode.GetValue("headLocalRot"));
-      headState = PlugState.Deployed;
-    }
-
-    if (node.HasNode("PLUG")) {
-      KAS_Shared.DebugLog("OnLoad(Winch) Loading plug info from save...");
-      ConfigNode plugNode = node.GetNode("PLUG");
-      connectedPortInfo.savedVesselID = plugNode.GetValue("vesselId").ToString();
-      connectedPortInfo.savedPartID = plugNode.GetValue("partId").ToString();
-      if (plugNode.GetValue("type").ToString() == "docked") {
-        headState = PlugState.PlugDocked;
-      }
-      if (plugNode.GetValue("type").ToString() == "undocked") {
-        headState = PlugState.PlugUndocked;
-      }
-    }
+    persistentData.OnLoad(node);
+    persistentData.RestoreWinch(this);
   }
 
   public override void OnStart(StartState state) {
