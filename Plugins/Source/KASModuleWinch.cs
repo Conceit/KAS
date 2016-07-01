@@ -169,18 +169,9 @@ public class KASModuleWinch : KASModuleAttachCore {
 
   private Vector3 headOrgLocalPos;
   private Quaternion headOrgLocalRot;
-  private Vector3 headCurrentLocalPos;
-  private Quaternion headCurrentLocalRot;
-  #endregion
-
-  #region Connected port properties
-  public PortInfo connectedPortInfo;
-  public struct PortInfo {
-    public KASModulePort module;
-    public string savedVesselID;
-    public string savedPartID;
-  }
     #endregion
+
+  private KASModulePort connectedPort;
 
   #region Persistent data
   protected class PersistentData
@@ -192,27 +183,85 @@ public class KASModuleWinch : KASModuleAttachCore {
     private string partID;
 
     /// <summary>
-    /// Copy persistent data to the winch
+    /// Copy persistent data to the winch. Called by OnVesselGoOffRails.
+    /// Derived classes can override this to set up their winch from loaded date.
     /// </summary>
-    /// <param name="winch"></param>
+    /// <param name="winch">the winch instance</param>
     public void RestoreWinch(KASModuleWinch winch) {
-        winch.headState = headState;
-        winch.headCurrentLocalPos = headLocalPos;
-        winch.headCurrentLocalRot = headLocalRot;
-        winch.connectedPortInfo.savedVesselID = vesselID;
-        winch.connectedPortInfo.savedPartID = partID;
-    }
+        // Taken from OnStart
+        if (headState != PlugState.Locked)
+        {
+          KAS_Shared.SetPartLocalPosRotFrom(winch.headTransform, winch.part.transform,
+                                            headLocalPos, headLocalRot);
+          winch.SetTubeRenderer(true);
+        }
 
-    /// <summary>
-    /// Copy the winch's persistent data to this structure
-    /// </summary>
-    /// <param name="winch"></param>
-    public void UpdatePersistentData(KASModuleWinch winch) {
+        // Taken from WaitAndLoadConnection coroutine. This was done in a coroutine
+        // to postpone processing to the next frame, where the physics engine has
+        // settled. Here, it's in one place and called by OnVesselGoOffRails,
+        // where this should work pretty well.
+
+        if (headState == PlugState.PlugDocked || headState == PlugState.PlugUndocked)
+        {
+          KAS_Shared.DebugLog("OnStart(Winch) Retrieve part with ID : " + partID
+                              + " | From vessel ID : " + vesselID);
+          Part connectedPartSaved =
+              KAS_Shared.GetPartByID(vesselID, partID);
+
+          if (connectedPartSaved)
+          {
+            KASModulePort connectedPortSaved = connectedPartSaved.GetComponent<KASModulePort>();
+            if (connectedPortSaved)
+              winch.connectedPort = connectedPortSaved;
+            else
+            {
+              KAS_Shared.DebugError("OnStart(Winch) Unable to get saved plugged port module !");
+              headState = PlugState.Locked;
+            }
+          }
+          else
+          {
+            KAS_Shared.DebugError("OnStart(Winch) Unable to get saved plugged part !");
+            headState = PlugState.Locked;
+          }
+        }
+
+        // Taken from OnVesselGoOffRails
+        if (headState == PlugState.Deployed)
+        {
+          KAS_Shared.DebugLog("OnVesselGoOffRails(Winch) Head deployed or docked and no cable joint"
+                              + " exist, re-deploy and set head position");
+          winch.Deploy();
+          KAS_Shared.SetPartLocalPosRotFrom(winch.headTransform, winch.part.transform,
+                                            headLocalPos, headLocalRot);
+          winch.cableJointLength = winch.cableRealLength;
+        }
+
+        if (headState == PlugState.PlugUndocked)
+        {
+          KAS_Shared.DebugLog("OnVesselGoOffRails(Winch) From save, Plug (undocked) to : "
+                              + winch.connectedPort.part.partInfo.title);
+          winch.PlugHead(winch.connectedPort, PlugState.PlugUndocked, silent: true);
+        }
+
+        if (headState == PlugState.PlugDocked)
+        {
+          KAS_Shared.DebugLog("OnVesselGoOffRails(Winch) From save, Plug (docked) to : "
+                              + winch.connectedPort.part.partInfo.title);
+          winch.PlugHead(winch.connectedPort, PlugState.PlugDocked, silent: true, alreadyDocked: true);
+        }
+      }
+
+      /// <summary>
+      /// Copy the winch's persistent data to this structure
+      /// </summary>
+      /// <param name="winch"></param>
+      public void UpdatePersistentData(KASModuleWinch winch) {
       headState = winch.headState;
       headLocalPos = KAS_Shared.GetLocalPosFrom(winch.headTransform, winch.part.transform);
       headLocalRot = KAS_Shared.GetLocalRotFrom(winch.headTransform, winch.part.transform);
-      vesselID = winch.connectedPortInfo.module.vessel.id.ToString();
-      partID = winch.connectedPortInfo.module.part.flightID.ToString();
+      vesselID = (winch.connectedPort) ? winch.connectedPort.vessel.id.ToString() : null;
+      partID = (winch.connectedPort) ? winch.connectedPort.part.flightID.ToString() : null;
     }
     
     /// <summary>
@@ -349,7 +398,8 @@ public class KASModuleWinch : KASModuleAttachCore {
     //    by length and dockee-properties
     base.OnLoad(node);
     persistentData.OnLoad(node);
-    persistentData.RestoreWinch(this);
+    // persistentData.RestoreWinch(this) is handled in OnVesselGoOffRails, when all 
+    // necessary parts are avaiable
   }
 
   public override void OnStart(StartState state) {
@@ -437,17 +487,14 @@ public class KASModuleWinch : KASModuleAttachCore {
         KAS_Shared.DebugWarning("OnStart(Winch) No connected part found !");
       }
     }
-
+    
     // Get saved port module if any
+    // SMELL: Remove
+    /*
     if (headState == PlugState.PlugDocked || headState == PlugState.PlugUndocked) {
       StartCoroutine(WaitAndLoadConnection());
     }
-
-    if (headState != PlugState.Locked) {
-      KAS_Shared.SetPartLocalPosRotFrom(headTransform, this.part.transform,
-                                        headCurrentLocalPos, headCurrentLocalRot);
-      SetTubeRenderer(true);
-    }
+    */
 
     motorSpeedSetting = motorMaxSpeed / 2;
 
@@ -458,62 +505,27 @@ public class KASModuleWinch : KASModuleAttachCore {
         new EventData<GameEvents.FromToAction<Part, Part>>.OnEvent(this.OnCrewBoardVessel));
   }
 
+  // SMELL: Remove
+  /*
   IEnumerator WaitAndLoadConnection() {
     yield return new WaitForEndOfFrame();
 
     // Get saved port module if any
     // SMELL: Large fn for small functionality, can be condensed?
-    if (headState == PlugState.PlugDocked || headState == PlugState.PlugUndocked) {
-      KAS_Shared.DebugLog("OnStart(Winch) Retrieve part with ID : " + connectedPortInfo.savedPartID
-                          + " | From vessel ID : " + connectedPortInfo.savedVesselID);
-      Part connectedPartSaved =
-          KAS_Shared.GetPartByID(connectedPortInfo.savedVesselID, connectedPortInfo.savedPartID);
-      if (connectedPartSaved) {
-        KASModulePort connectedPortSaved = connectedPartSaved.GetComponent<KASModulePort>();
-        if (connectedPortSaved) {
-          connectedPortInfo.module = connectedPortSaved;
-        } else {
-          KAS_Shared.DebugError("OnStart(Winch) Unable to get saved plugged port module !");
-          headState = PlugState.Locked;
-        }
-      } else {
-        KAS_Shared.DebugError("OnStart(Winch) Unable to get saved plugged part !");
-        headState = PlugState.Locked;
-      }
-    }
   }
+  */
 
   void OnVesselGoOnRails(Vessel vess) {
   }
 
   void OnVesselGoOffRails(Vessel vess) {
     // SMELL: Should this fn just restore state from persisted data?
-    if (vessel.packed || (connectedPortInfo.module
-                                       && connectedPortInfo.module.vessel.packed)) {
+    if (vessel.packed || (connectedPort
+                                       && connectedPort.vessel.packed)) {
       return;
     }
 
-    // From save
-    if (headState == PlugState.Deployed) {
-      KAS_Shared.DebugLog("OnVesselGoOffRails(Winch) Head deployed or docked and no cable joint"
-                          + " exist, re-deploy and set head position");
-      Deploy();
-      KAS_Shared.SetPartLocalPosRotFrom(headTransform, this.part.transform,
-                                        headCurrentLocalPos, headCurrentLocalRot);
-      cableJointLength = cableRealLength;
-    }
-
-    if (headState == PlugState.PlugUndocked) {
-      KAS_Shared.DebugLog("OnVesselGoOffRails(Winch) From save, Plug (undocked) to : "
-                          + connectedPortInfo.module.part.partInfo.title);
-      PlugHead(connectedPortInfo.module, PlugState.PlugUndocked, silent: true);
-    }
-
-    if (headState == PlugState.PlugDocked) {
-      KAS_Shared.DebugLog("OnVesselGoOffRails(Winch) From save, Plug (docked) to : "
-                          + connectedPortInfo.module.part.partInfo.title);
-      PlugHead(connectedPortInfo.module, PlugState.PlugDocked, silent: true, alreadyDocked: true);
-    }
+    persistentData.RestoreWinch(this);
   }
 
   void OnCrewBoardVessel(GameEvents.FromToAction<Part, Part> fromToAction) {
@@ -725,10 +737,10 @@ public class KASModuleWinch : KASModuleAttachCore {
 
   private void UpdateOrgPos() {
     if (headState == PlugState.PlugDocked) {
-      if (connectedPortInfo.module.part.parent == this.part) {
-        KAS_Shared.UpdateChildsOrgPos(connectedPortInfo.module.part, true);
+      if (connectedPort.part.parent == this.part) {
+        KAS_Shared.UpdateChildsOrgPos(connectedPort.part, true);
       }
-      if (this.part.parent == connectedPortInfo.module.part) {
+      if (this.part.parent == connectedPort.part) {
         KAS_Shared.UpdateChildsOrgPos(this.part, true);
       }
     }
@@ -1009,7 +1021,7 @@ public class KASModuleWinch : KASModuleAttachCore {
 
         // Now, plug that thing.
         if (headState == PlugState.Deployed)
-            plugHead(portModule, silent: (plugMode != PlugState.PlugUndocked)); // don't be silent if this is the targeted mode
+            plugHead(portModule, silent: (plugMode != PlugState.PlugUndocked) || silent); // don't be silent if this is the targeted mode
 
         // If required, additionally dock it
         if (plugMode == PlugState.PlugDocked)
@@ -1031,7 +1043,7 @@ public class KASModuleWinch : KASModuleAttachCore {
 
     public void Dock(bool silent = false)
     {
-        KASModulePort target = connectedPortInfo.module;
+        KASModulePort target = connectedPort;
         if (
                 target && target.part && this.part 
                 && (this.part.vessel != target.part.vessel) // don't dock same vessel!
@@ -1133,7 +1145,7 @@ public class KASModuleWinch : KASModuleAttachCore {
             Vessel originalVessel = this.vessel;
             bool is_active = (FlightGlobals.ActiveVessel == this.vessel);
             // Decouple and re-dock
-            KASModulePort tmpPortModule = connectedPortInfo.module;
+            KASModulePort tmpPortModule = connectedPort;
             UnplugHead(silent: true);
             KAS_Shared.MoveAlignLight(
                 tmpPortModule.part.vessel, tmpPortModule.portNode, part.vessel, headPortNode);
@@ -1182,14 +1194,14 @@ public class KASModuleWinch : KASModuleAttachCore {
         cableJointLength = cableRealLength + 0.01f;
 
         // Set variables
-        connectedPortInfo.module = target;
-        connectedPortInfo.module.plugged = true;
+        connectedPort = target;
+        connectedPort.plugged = true;
         target.winchConnected = this;
     }
 
     private void dockHead(bool silent = false)
     {
-        KASModulePort target = connectedPortInfo.module;
+        KASModulePort target = connectedPort;
         KAS_Shared.DebugLog("PlugHead(Winch) - Plug using docked mode");
         // This should be safe even if already connected
         AttachDocked(target);
@@ -1215,8 +1227,8 @@ public class KASModuleWinch : KASModuleAttachCore {
         if (!silent)
         {
           AudioSource.PlayClipAtPoint(
-              GameDatabase.Instance.GetAudioClip(connectedPortInfo.module.unplugDockedSndPath),
-              connectedPortInfo.module.part.transform.position);
+              GameDatabase.Instance.GetAudioClip(connectedPort.unplugDockedSndPath),
+              connectedPort.part.transform.position);
         }
         headState = PlugState.PlugUndocked;
     }
@@ -1226,16 +1238,16 @@ public class KASModuleWinch : KASModuleAttachCore {
       if (!silent)
       {
         AudioSource.PlayClipAtPoint(
-            GameDatabase.Instance.GetAudioClip(connectedPortInfo.module.plugSndPath),
-            connectedPortInfo.module.part.transform.position);
+            GameDatabase.Instance.GetAudioClip(connectedPort.plugSndPath),
+            connectedPort.part.transform.position);
       }
       SetHeadToPhysic(true);
       SetCableJointConnectedBody(headTransform.GetComponent<Rigidbody>());
 
-      connectedPortInfo.module.winchConnected = null;
-      connectedPortInfo.module.nodeConnectedPart = null;
-      connectedPortInfo.module.plugged = false;
-      connectedPortInfo.module = null;
+      connectedPort.winchConnected = null;
+      connectedPort.nodeConnectedPart = null;
+      connectedPort.plugged = false;
+      connectedPort = null;
       nodeConnectedPort = null;
       headState = PlugState.Deployed;
     }
@@ -1248,8 +1260,8 @@ public class KASModuleWinch : KASModuleAttachCore {
       retract.full = false;
       cableJointLength = maxLength;
       Vector3 force = winchAnchorNode.TransformDirection(Vector3.forward) * ejectForce;
-      Rigidbody rb = connectedPortInfo.module
-          ? connectedPortInfo.module.part.Rigidbody
+      Rigidbody rb = connectedPort
+          ? connectedPort.part.Rigidbody
           : headTransform.GetComponent<Rigidbody>();
 
       // Apply ejection force on the projectile and enhance collision check mode. 
@@ -1315,15 +1327,15 @@ public class KASModuleWinch : KASModuleAttachCore {
   }
 
   public KASModuleMagnet GetHookMagnet() {
-    if (connectedPortInfo.module) {
-      return connectedPortInfo.module.GetComponent<KASModuleMagnet>();
+    if (connectedPort) {
+      return connectedPort.GetComponent<KASModuleMagnet>();
     }
     return null;
   }
 
   public KASModuleHarpoon GetHookGrapple() {
-    if (connectedPortInfo.module) {
-      return connectedPortInfo.module.GetComponent<KASModuleHarpoon>();
+    if (connectedPort) {
+      return connectedPort.GetComponent<KASModuleHarpoon>();
     }
     return null;
   }
@@ -1540,15 +1552,15 @@ public class KASModuleWinch : KASModuleAttachCore {
 
   public void EventWinchHeadLeft() {
     if (!this.part.packed && controlActivated && headState != PlugState.Locked
-        && connectedPortInfo.module) {
-      connectedPortInfo.module.TurnLeft();
+        && connectedPort) {
+      connectedPort.TurnLeft();
     }
   }
 
   public void EventWinchHeadRight() {
     if (!this.part.packed && controlActivated && headState != PlugState.Locked
-        && connectedPortInfo.module) {
-      connectedPortInfo.module.TurnRight();
+        && connectedPort) {
+      connectedPort.TurnRight();
     }
   }
 
